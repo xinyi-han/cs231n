@@ -74,7 +74,13 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        for l, (i, j) in enumerate(zip([input_dim] + hidden_dims, hidden_dims + [num_classes]), 1):
+            self.params[f'W{l}'] = np.random.randn(i, j) * weight_scale
+            self.params[f'b{l}'] = np.zeros(j)
+
+            if normalization is not None and l < self.num_layers:
+                self.params[f'gamma{l}'] = np.ones(j)
+                self.params[f'beta{l}'] = np.zeros(j)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -148,7 +154,23 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        out = X
+        caches = dict()
+        for l in range(1, self.num_layers):
+            W = self.params[f'W{l}']
+            b = self.params[f'b{l}']
+            gamma = self.params.get(f'gamma{l}', None)
+            beta = self.params.get(f'beta{l}', None)
+            bn_params = None if self.normalization is None else self.bn_params[l - 1]
+            dropout_param = self.dropout_param if self.use_dropout else None
+
+            out, cache = affine_norm_relu_dropout_forward(out, W, b, gamma, beta, bn_params, dropout_param)
+            caches[l] = cache
+
+        W = self.params[f'W{self.num_layers}']
+        b = self.params[f'b{self.num_layers}']
+        scores, cache = affine_forward(out, W, b)
+        caches[self.num_layers] = cache
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -175,7 +197,28 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dout = softmax_loss(scores, y)
+
+        W = self.params[f'W{self.num_layers}']
+        loss += 0.5 * self.reg * np.sum(W ** 2)
+        cache = caches[self.num_layers]
+        dout, dw, db = affine_backward(dout, cache)
+        dw += self.reg * W
+        grads[f'W{self.num_layers}'] = dw
+        grads[f'b{self.num_layers}'] = db
+
+        for l in range(self.num_layers - 1, 0, -1):
+            W = self.params[f'W{l}']
+            loss += 0.5 * self.reg * np.sum(W ** 2)
+            cache = caches[l]
+            dout, dw, db, dgamma, dbeta = affine_norm_relu_dropout_backward(dout, cache, self.normalization)
+            dw += self.reg * W
+            grads[f'W{l}'] = dw
+            grads[f'b{l}'] = db
+
+            if self.normalization is not None:
+                grads[f'gamma{l}'] = dgamma
+                grads[f'beta{l}'] = dbeta
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
