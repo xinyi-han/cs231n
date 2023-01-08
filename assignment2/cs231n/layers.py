@@ -392,7 +392,19 @@ def layernorm_forward(x, gamma, beta, ln_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, D = x.shape
+    xT = np.transpose(x)  # shape (D, N)
+    gammaT = gamma.reshape((D, 1))  # shape (D, 1)
+    betaT = beta.reshape((D, 1))  # shape (D, 1)
+
+    mean = np.mean(xT, axis=0)  # shape (N,)
+    var = np.var(xT, axis=0)  # shape (N,)
+    std = np.sqrt(var + eps)  # shape (N,)
+    X = (xT - mean) / std  # shape (D, N)
+    out = gammaT * X + betaT  # shape (D, N)
+
+    cache = xT, mean, var, eps, X, gammaT
+    out = np.transpose(out)  # shape (N, D)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -426,7 +438,16 @@ def layernorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, D = dout.shape
+    xT, mean, var, eps, X, gammaT = cache
+
+    doutT = np.transpose(dout)  # shape (D, N)
+    dX = doutT * gammaT  # shape (D, N)
+    dx = (D * dX - np.sum(dX, axis=0) - X * np.sum(dX * X, axis=0)) / (D * np.sqrt(var + eps))  # shape (D, N)
+    dgamma = np.sum(doutT * X, axis=1)  # shape (D,)
+    dbeta = np.sum(doutT, axis=1)  # shape (D,)
+
+    dx = np.transpose(dx)  # shape (N, D)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
