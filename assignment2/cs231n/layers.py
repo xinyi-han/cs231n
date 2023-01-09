@@ -580,7 +580,24 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+
+    x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+    H1 = 1 + (H + 2 * pad - HH) // stride
+    W1 = 1 + (W + 2 * pad - WW) // stride
+    shape = (H1, W1) + (C, HH, WW)
+    n, c, hh, ww = x_pad.strides
+    strides = (hh * stride, ww * stride, c, hh, ww)
+
+    out = np.zeros((N, F, H1, W1))
+
+    for i in range(N):
+        x_stride = np.lib.stride_tricks.as_strided(x_pad[i], shape=shape, strides=strides, writeable=False)
+        for j in range(F):
+            out[i, j, :, :] = (x_stride * w[j]).sum(axis=-1).sum(axis=-1).sum(axis=-1) + b[j]  # shape (H1, W1)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -608,7 +625,33 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, w, b, conv_param = cache
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    N, F, H1, W1 = dout.shape
+
+    x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+    shape = (H1, W1) + (C, HH, WW)
+    n, c, hh, ww = x_pad.strides
+    strides = (hh * stride, ww * stride, c, hh, ww)
+
+    db = np.sum(dout.sum(axis=-1).sum(axis=-1), axis=0)
+    dw = np.zeros((N, F, C, HH, WW))
+    dx = np.zeros((N, F, C, H + 2 * pad, W + 2 * pad))
+
+    for i in range(N):
+        x_stride = np.lib.stride_tricks.as_strided(x_pad[i], shape=shape, strides=strides, writeable=False)
+        for j in range(F):
+            dw[i, j, :, :, :] = (dout[i, j, :, :].reshape((H1, W1, 1, 1, 1)) * x_stride).sum(axis=0).sum(axis=0)
+            for p in range(H1):
+                for q in range(W1):
+                    dx[i, j, :, p * stride:p * stride + HH, q * stride:q * stride + WW] += dout[i, j, p, q] * w[j]
+
+    dw = dw.sum(axis=0)
+    dx = dx[:, :, :, pad:-pad, pad:-pad]
+    dx = dx.sum(axis=1)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
